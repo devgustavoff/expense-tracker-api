@@ -1,0 +1,24 @@
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: expense-tracker
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    develop:
+      watch:
+        - action: sync+restart
+          path: .
+          target: /app
+        - action: rebuild
+          path: pyproject.toml
+  
+volumes:
+  postgres_data:
