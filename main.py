@@ -43,6 +43,18 @@ class UserOut(BaseModel):
 class UserIn(UserOut):
     password: str
 
+class ExpenseIn(BaseModel):
+    amount: Decimal
+    description: str
+    category: str | None = None
+
+class ExpenseOut(BaseModel):
+    expense_id: int
+    amount: Decimal
+    description: str
+    category: str | None = None
+    created_at: datetime
+
 def get_session():
     with Session(engine) as session:
         yield session
@@ -104,6 +116,23 @@ async def login(*, session: Session = Depends(get_session), form_data: OAuth2Pas
 
     return {"access_token": access_token, "token_type": "bearer"}
 
-@app.get("/me", response_model_exclude={"password"})
-async def me(current_user: User = Depends(get_current_user)) -> User:
-    return current_user
+@app.post("/expenses", response_model=ExpenseOut)
+async def creat_expense(*, session: Session = Depends(get_session), expense_data: ExpenseIn, current_user: User = Depends(get_current_user)) -> Expense:
+    expense = Expense(
+        user_id=current_user.user_id,
+        amount=expense_data.amount,
+        description=expense_data.description,
+        category=expense_data.category
+    )
+
+    session.add(expense)
+    session.commit()
+    session.refresh(expense)
+
+    return expense
+
+@app.get("/expenses", response_model=list[ExpenseOut])
+async def read_expenses(*, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)) -> list[Expense]:
+    expenses = session.exec(select(Expense).where(Expense.user_id == current_user.user_id)).all()
+
+    return list(expenses)
