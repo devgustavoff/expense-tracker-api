@@ -55,6 +55,11 @@ class ExpenseOut(BaseModel):
     category: str | None = None
     created_at: datetime
 
+class ExpenseUpdate(BaseModel):
+    amount: Decimal
+    description: str
+    category: str | None = None
+
 def get_session():
     with Session(engine) as session:
         yield session
@@ -117,7 +122,7 @@ async def login(*, session: Session = Depends(get_session), form_data: OAuth2Pas
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.post("/expenses", response_model=ExpenseOut)
-async def creat_expense(*, session: Session = Depends(get_session), expense_data: ExpenseIn, current_user: User = Depends(get_current_user)) -> Expense:
+async def create_expense(*, session: Session = Depends(get_session), expense_data: ExpenseIn, current_user: User = Depends(get_current_user)) -> Expense:
     expense = Expense(
         user_id=current_user.user_id,
         amount=expense_data.amount,
@@ -136,3 +141,30 @@ async def read_expenses(*, session: Session = Depends(get_session), current_user
     expenses = session.exec(select(Expense).where(Expense.user_id == current_user.user_id)).all()
 
     return list(expenses)
+
+@app.get("/expenses/{expense_id}", response_model=ExpenseOut)
+async def get_expense(expense_id: int, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    expense = session.get(Expense, expense_id)
+    if expense is None:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    if expense.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="User not authorized")
+    
+    return expense
+
+@app.post("/expenses/{expense_id}", response_model=ExpenseUpdate)
+async def update_expense(expense_id: int, client_datas: ExpenseUpdate, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    expense = session.get(Expense, expense_id)
+    if expense is None:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    if expense.user_id != current_user.user_id:
+        raise HTTPException(status_code=401, detail="User not authorized")
+
+    expense_data = client_datas.model_dump(exclude_unset=True)
+    expense.sqlmodel_update(expense_data)
+    session.add(expense)
+    session.commit()
+    session.refresh(expense)
+    return expense
