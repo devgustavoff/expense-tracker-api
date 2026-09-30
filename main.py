@@ -45,7 +45,7 @@ class UserIn(UserOut):
 
 class ExpenseIn(BaseModel):
     amount: Decimal
-    description: str
+    description: str | None = None
     category: str | None = None
 
 class ExpenseOut(BaseModel):
@@ -56,8 +56,8 @@ class ExpenseOut(BaseModel):
     created_at: datetime
 
 class ExpenseUpdate(BaseModel):
-    amount: Decimal
-    description: str
+    amount: Decimal | None = None
+    description: str | None = None
     category: str | None = None
 
 def get_session():
@@ -153,7 +153,7 @@ async def get_expense(expense_id: int, current_user: User = Depends(get_current_
     
     return expense
 
-@app.post("/expenses/{expense_id}", response_model=ExpenseUpdate)
+@app.patch("/expenses/{expense_id}", response_model=ExpenseUpdate)
 async def update_expense(expense_id: int, client_datas: ExpenseUpdate, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     expense = session.get(Expense, expense_id)
     if expense is None:
@@ -167,4 +167,18 @@ async def update_expense(expense_id: int, client_datas: ExpenseUpdate, current_u
     session.add(expense)
     session.commit()
     session.refresh(expense)
+    return expense
+
+@app.delete("/expenses/{expense_id}", response_model=ExpenseOut)
+async def delete_expense(expense_id: int, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    expense = session.get(Expense, expense_id)
+    if expense is None:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    if expense.user_id != current_user.user_id:
+        raise HTTPException(status_code=401, detail="User not authorized")
+
+    session.delete(expense)
+    session.commit()
+
     return expense
