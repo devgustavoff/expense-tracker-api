@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
-from sqlmodel import Session, SQLModel, create_engine, Field, select
-from datetime import datetime, timezone, timedelta
+from sqlmodel import Session, SQLModel, create_engine, Field, select, or_
+from datetime import datetime, timezone, timedelta, date
 from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
 from pwdlib import PasswordHash
@@ -137,8 +137,26 @@ async def create_expense(*, session: Session = Depends(get_session), expense_dat
     return expense
 
 @app.get("/expenses", response_model=list[ExpenseOut])
-async def read_expenses(*, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)) -> list[Expense]:
-    expenses = session.exec(select(Expense).where(Expense.user_id == current_user.user_id)).all()
+async def read_expenses(
+    *, session: Session = Depends(get_session), 
+    current_user: User = Depends(get_current_user), 
+    category: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None
+    ) -> list[Expense]:
+
+    statement = select(Expense).where(Expense.user_id == current_user.user_id)
+
+    if category is not None:
+        statement = statement.where(Expense.category == category)
+
+    if start_date is not None:
+        statement = statement.where(Expense.created_at >= start_date)
+
+    if end_date is not None:
+        statement = statement.where(Expense.created_at < end_date + timedelta(days=1))
+
+    expenses = session.exec(statement).all()
 
     return list(expenses)
 
